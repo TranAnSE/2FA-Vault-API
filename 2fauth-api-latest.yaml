@@ -201,6 +201,39 @@ paths:
         A `204 — No Content` response will be returned even if some resources no longer exist before delete.
       parameters:
         - $ref: '#/components/parameters/ids'
+  /api/v1/twofaccounts/encrypted:
+    get:
+      summary: Get encrypted 2FA accounts
+      tags:
+        - twofaccounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Encrypted2FAccountCollection'
+              examples:
+                Example:
+                  value:
+                    - id: 1
+                      group_id: 1
+                      service: MySite
+                      account: john.doe
+                      otp_type: totp
+                      secret: '{"ciphertext":"Y2lwaGVydGV4dA==","iv":"aW5pdGlhbGl6YXRpb25WZWN0b3I=","authTag":"YXV0aFRhZw=="}'
+                      encrypted: true
+                      digits: 6
+                      algorithm: sha1
+                      period: 30
+                      counter: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      operationId: get-twofaccounts-encrypted
+      description: Returns encrypted 2FA accounts of the authenticated user without server-side decryption. The secret field contains the raw ciphertext JSON string generated client-side.
+    parameters: []
   '/api/v1/twofaccounts/{id}':
     parameters:
       - $ref: '#/components/parameters/id'
@@ -1514,6 +1547,34 @@ paths:
       x-badges:
         - color: orange
           label: admin
+  /api/v1/encryption/info:
+    get:
+      summary: Get encryption info
+      tags:
+        - encryption
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptionInfo'
+              examples:
+                Encryption enabled:
+                  value:
+                    encryption_enabled: true
+                    encryption_salt: test_salt
+                    encryption_test_value: '{"ciphertext":"test","iv":"test","authTag":"test"}'
+                    encryption_version: 1
+                    vault_locked: false
+                Encryption disabled:
+                  value:
+                    encryption_enabled: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: get-encryption-info
+      description: Returns the authenticated user's encryption status and, when enabled, the salt and encrypted test value needed for client-side key derivation and verification.
+    parameters: []
   /api/v1/user:
     get:
       summary: Get user
@@ -2225,6 +2286,121 @@ components:
           required:
             - id
         - $ref: '#/components/schemas/2FAccountStore'
+    Encrypted2FAccountRead:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type:
+                - integer
+                - 'null'
+              example: 1
+              description: ID of the 2FA account
+              minimum: 1
+            encrypted:
+              type: boolean
+              example: true
+              description: Indicates the secret field contains encrypted ciphertext JSON instead of plaintext secret material
+          required:
+            - id
+            - encrypted
+        - type: object
+          properties:
+            group_id:
+              type:
+                - integer
+                - 'null'
+              description: The ID of the group the 2FA account belongs to
+              minimum: 0
+            service:
+              type:
+                - string
+                - 'null'
+              description: The Issuer of the 2FA account
+              example: MySite
+            account:
+              type: string
+              description: The Label of the 2FA account
+              example: john.doe
+            otp_type:
+              type: string
+              enum:
+                - totp
+                - hotp
+              example: totp
+            secret:
+              type:
+                - string
+                - 'null'
+              description: Raw ciphertext JSON string with ciphertext, iv, and authTag fields
+              example: '{"ciphertext":"Y2lwaGVydGV4dA==","iv":"aW5pdGlhbGl6YXRpb25WZWN0b3I=","authTag":"YXV0aFRhZw=="}'
+            digits:
+              type: integer
+              example: 6
+            algorithm:
+              type: string
+              enum:
+                - sha1
+                - sha256
+                - sha512
+                - md5
+              example: sha1
+            period:
+              type:
+                - integer
+                - 'null'
+              example: 30
+            counter:
+              type:
+                - integer
+                - 'null'
+              example: 15
+          required:
+            - group_id
+            - service
+            - account
+            - otp_type
+            - secret
+            - digits
+            - algorithm
+            - period
+            - counter
+    Encrypted2FAccountCollection:
+      title: Encrypted 2FA Accounts Collection schema
+      description: An array of encrypted 2FA accounts
+      type: array
+      items:
+        $ref: '#/components/schemas/Encrypted2FAccountRead'
+    EncryptionInfo:
+      title: Encryption info schema
+      type: object
+      description: Encryption status and client-side derivation metadata for the authenticated user
+      properties:
+        encryption_enabled:
+          type: boolean
+          example: true
+        encryption_salt:
+          type:
+            - string
+            - 'null'
+          example: test_salt
+        encryption_test_value:
+          type:
+            - string
+            - 'null'
+          example: '{"ciphertext":"test","iv":"test","authTag":"test"}'
+        encryption_version:
+          type:
+            - integer
+            - 'null'
+          example: 1
+        vault_locked:
+          type:
+            - boolean
+            - 'null'
+          example: false
+      required:
+        - encryption_enabled
     2FAccountUpdate:
       title: Update 2FA Account schema
       type: object

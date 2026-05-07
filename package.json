@@ -1,0 +1,11 @@
+{
+  "name": "2fauth-api-spec",
+  "private": true,
+  "scripts": {
+    "validate": "npm run validate:openapi",
+    "validate:openapi": "node scripts/validate-openapi.mjs"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.30.3"
+  }
+}

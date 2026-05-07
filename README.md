@@ -6,3 +6,12 @@ Repository used to edit the 2FAuth API specification.
 
 - 2FAuth API documentation: <https://docs.2fauth.app/resources/rapidoc.html>
 - 2FAuth main repository: <https://github.com/Bubka/2FAuth>
+
+## Validation
+
+Install dependencies, then validate all OpenAPI specs:
+
+```bash
+npm install
+npm run validate:openapi
+```
