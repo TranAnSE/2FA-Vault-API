@@ -1,21 +1,20 @@
 openapi: 3.1.0
 info:
-  title: 2FAuth API
-  version: 1.9.0
+  title: 2FA-Vault API
+  version: 1.10.0
   description: |-
-    This is the definition (following OpenAPI 3.1 specification) of the REST API of [2FAuth](https://github.com/Bubka/2FAuth), a web app to manage your Two-Factor Authentication (2FA) accounts and generate their security passwords.
+    This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FAuth](https://github.com/Bubka/2FAuth) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 
-    The API is available once you installed 2FAuth on your server.
+    2FA-Vault keeps the upstream 2FAuth account, group, icon, QR code, user preference, setting, and user-management endpoints, and adds fork-specific endpoints for encrypted vault metadata, encrypted account sync, encrypted backups, web push subscriptions, teams, and additional administrator user management.
   contact:
-    name: Bubka
-    url: 'https://github.com/Bubka'
-    email: contact@2fauth.app
+    name: TranAnSE
+    url: 'https://github.com/TranAnSE/2FA-Vault'
   license:
     name: AGPL-3.0
     url: 'https://www.gnu.org/licenses/agpl-3.0.en.html'
 servers:
-  - url: 'https://demo.2fauth.app'
-    description: Demo server
+  - url: 'https://example.test'
+    description: Replace with your 2FA-Vault instance URL
 paths:
   /api/v1/twofaccounts:
     get:
@@ -234,6 +233,32 @@ paths:
       operationId: get-twofaccounts-encrypted
       description: Returns encrypted 2FA accounts of the authenticated user without server-side decryption. The secret field contains the raw ciphertext JSON string generated client-side.
     parameters: []
+  /api/v1/twofaccounts/count:
+    get:
+      summary: Count 2FA accounts
+      tags:
+        - twofaccounts
+      operationId: get-twofaccounts-count
+      description: Returns the number of 2FA accounts owned by the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+                    example: 42
+                required:
+                  - count
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    parameters: []
   '/api/v1/twofaccounts/{id}':
     parameters:
       - $ref: '#/components/parameters/id'
@@ -406,6 +431,42 @@ paths:
           $ref: '#/components/responses/NotFound'
       operationId: get-twofaccounts-id-otp
       description: Returns a fresh One-Time Password for the 2FA account of the authenticated user matching the specified ID
+  '/api/v1/twofaccounts/{id}/counter':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    patch:
+      summary: Update HOTP counter
+      tags:
+        - twofaccounts
+      operationId: patch-twofaccounts-id-counter
+      description: Updates a HOTP account counter without revalidating or rewriting the encrypted secret. The new counter must be greater than the current counter.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                counter:
+                  type: integer
+                  minimum: 0
+                  example: 16
+              required:
+                - counter
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/2FAccountRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /api/v1/twofaccounts/otp:
     parameters: []
     post:
@@ -1575,6 +1636,928 @@ paths:
       operationId: get-encryption-info
       description: Returns the authenticated user's encryption status and, when enabled, the salt and encrypted test value needed for client-side key derivation and verification.
     parameters: []
+  /api/v1/encryption/setup:
+    post:
+      summary: Set up end-to-end encryption
+      tags:
+        - encryption
+      operationId: post-encryption-setup
+      description: Stores client-generated encryption metadata. The server receives only the salt, encrypted verification payload, and version; it never receives the master password or derived key.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncryptionSetup'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptionSetupResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    parameters: []
+  /api/v1/encryption/salt:
+    get:
+      summary: Get encryption salt
+      tags:
+        - encryption
+      operationId: get-encryption-salt
+      description: Returns the user's stored salt for client-side Argon2id key derivation.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  encryption_salt:
+                    type: string
+                    example: 7ad7b84b8e8b40b3a9f6f8e3a2d1c0ab
+                required:
+                  - encryption_salt
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/encryption/status:
+    get:
+      summary: Get encryption status
+      tags:
+        - encryption
+      operationId: get-encryption-status
+      description: Returns compact E2EE setup and lock-state flags for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/encryption/verify:
+    post:
+      summary: Verify local vault unlock
+      tags:
+        - encryption
+      operationId: post-encryption-verify
+      description: Confirms whether the client successfully decrypted the verification payload locally. A successful verification unlocks the server-side vault state.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                verification_result:
+                  type: boolean
+                  example: true
+              required:
+                - verification_result
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultLockResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/encryption/lock:
+    post:
+      summary: Lock encrypted vault
+      tags:
+        - encryption
+      operationId: post-encryption-lock
+      description: Marks the authenticated user's encrypted vault as locked.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultLockResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/encryption/disable:
+    delete:
+      summary: Disable end-to-end encryption
+      tags:
+        - encryption
+      operationId: delete-encryption-disable
+      description: Disables E2EE after password confirmation. This operation is rate limited and should only be used after client-side migration has been handled.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  format: password
+                confirm:
+                  type: boolean
+                  example: true
+              required:
+                - password
+                - confirm
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptionSetupResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    parameters: []
+  /api/v1/features:
+    get:
+      summary: Get feature flags
+      tags:
+        - features
+      operationId: get-features
+      description: Returns feature flags exposed by the current 2FA-Vault instance.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  '/api/v1/features/{name}':
+    parameters:
+      - $ref: '#/components/parameters/name'
+    get:
+      summary: Get feature flag
+      tags:
+        - features
+      operationId: get-features-name
+      description: Returns one named feature flag.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/backups/export:
+    post:
+      summary: Export encrypted backup
+      tags:
+        - backups
+      operationId: post-backups-export
+      description: Generates a `.vault` backup package. For JSON clients the response contains filename and counts; browser clients may receive a streamed file download.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackupExportRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupExportResult'
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    parameters: []
+  /api/v1/backups/import:
+    post:
+      summary: Import encrypted backup
+      tags:
+        - backups
+      operationId: post-backups-import
+      description: Imports a decrypted backup payload uploaded as a `.vault` or `.json` file. Account secrets inside the backup remain encrypted with the user's vault key.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BackupImportRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupImportResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/backups/metadata:
+    post:
+      summary: Read backup metadata
+      tags:
+        - backups
+      operationId: post-backups-metadata
+      description: Reads non-secret metadata from an uploaded backup file.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                backup_file:
+                  type: string
+                  format: binary
+              required:
+                - backup_file
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  /api/v1/backups/info:
+    get:
+      summary: Get backup stats
+      tags:
+        - backups
+      operationId: get-backups-info
+      description: Returns backup-related statistics for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/backup/export:
+    get:
+      summary: Export encrypted backup
+      tags:
+        - backups
+      operationId: get-backup-export
+      deprecated: true
+      description: Legacy alias of `POST /api/v1/backups/export`.
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Export encrypted backup
+      tags:
+        - backups
+      operationId: post-backup-export
+      deprecated: true
+      description: Legacy alias of `POST /api/v1/backups/export`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackupExportRequest'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  /api/v1/backup/import:
+    post:
+      summary: Import encrypted backup
+      tags:
+        - backups
+      operationId: post-backup-import
+      deprecated: true
+      description: Legacy alias of `POST /api/v1/backups/import`.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BackupImportRequest'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  /api/v1/backup/metadata:
+    post:
+      summary: Read backup metadata
+      tags:
+        - backups
+      operationId: post-backup-metadata
+      deprecated: true
+      description: Legacy alias of `POST /api/v1/backups/metadata`.
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/backup/info:
+    get:
+      summary: Get backup stats
+      tags:
+        - backups
+      operationId: get-backup-info
+      deprecated: true
+      description: Legacy alias of `GET /api/v1/backups/info`.
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/push/public-key:
+    get:
+      summary: Get web push public key
+      tags:
+        - push
+      operationId: get-push-public-key
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publicKey:
+                    type:
+                      - string
+                      - 'null'
+                required:
+                  - publicKey
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/push/subscribe:
+    post:
+      summary: Subscribe to web push
+      tags:
+        - push
+      operationId: post-push-subscribe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushSubscriptionRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  /api/v1/push/unsubscribe:
+    delete:
+      summary: Unsubscribe from web push
+      tags:
+        - push
+      operationId: delete-push-unsubscribe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+              required:
+                - endpoint
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  /api/v1/push/subscriptions:
+    get:
+      summary: List web push subscriptions
+      tags:
+        - push
+      operationId: get-push-subscriptions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PushSubscriptionRead'
+                required:
+                  - data
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+  /api/v1/push/test:
+    post:
+      summary: Send test web push notification
+      tags:
+        - push
+      operationId: post-push-test
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sent:
+                    type: integer
+                  failed:
+                    type: integer
+                required:
+                  - message
+                  - sent
+                  - failed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    parameters: []
+  /api/v1/teams:
+    get:
+      summary: List teams
+      tags:
+        - teams
+      operationId: get-teams
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    parameters: []
+    post:
+      summary: Create team
+      tags:
+        - teams
+      operationId: post-teams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/teams/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: Get team
+      tags:
+        - teams
+      operationId: get-teams-id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update team
+      tags:
+        - teams
+      operationId: put-teams-id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamStore'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Delete team
+      tags:
+        - teams
+      operationId: delete-teams-id
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/invitations':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: List team invitations
+      tags:
+        - teams
+      operationId: get-teams-id-invitations
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamInvitationCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Invite team member
+      tags:
+        - teams
+      operationId: post-teams-id-invitations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  invitation:
+                    $ref: '#/components/schemas/TeamInvitationRead'
+                required:
+                  - message
+                  - invitation
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/teams/{id}/invite':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Invite team member
+      tags:
+        - teams
+      operationId: post-teams-id-invite
+      deprecated: true
+      description: Alias of `POST /api/v1/teams/{id}/invitations`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInvitationStore'
+      responses:
+        '201':
+          description: Created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  '/api/v1/teams/{id}/invitations/{invitationId}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    delete:
+      summary: Cancel team invitation
+      tags:
+        - teams
+      operationId: delete-teams-id-invitations-invitationId
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/invitations/{token}/accept':
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Accept team invitation
+      tags:
+        - teams
+      operationId: post-teams-invitations-token-accept
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  team:
+                    $ref: '#/components/schemas/TeamRead'
+                required:
+                  - message
+                  - team
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/teams/join:
+    post:
+      summary: Join team by invite code
+      tags:
+        - teams
+      operationId: post-teams-join
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invite_code:
+                  type: string
+              required:
+                - invite_code
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    parameters: []
+  '/api/v1/teams/{id}/leave':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Leave team
+      tags:
+        - teams
+      operationId: post-teams-id-leave
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/members/{userId}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    delete:
+      summary: Remove team member
+      tags:
+        - teams
+      operationId: delete-teams-id-members-userId
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/members/{userId}/role':
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      summary: Update team member role
+      tags:
+        - teams
+      operationId: put-teams-id-members-userId-role
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/TeamRole'
+              required:
+                - role
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/teams/{id}/shared-accounts':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: List shared accounts
+      tags:
+        - teams
+      operationId: get-teams-id-shared-accounts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedAccountCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/share':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Share account with team
+      tags:
+        - teams
+      operationId: post-teams-id-share
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SharedAccountStore'
+      responses:
+        '201':
+          description: Created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/teams/{id}/share/{accountId}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    delete:
+      summary: Unshare account from team
+      tags:
+        - teams
+      operationId: delete-teams-id-share-accountId
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/user:
     get:
       summary: Get user
@@ -2170,6 +3153,96 @@ paths:
       x-badges:
         - color: orange
           label: admin
+  /api/v1/admin/users:
+    get:
+      summary: Get all registered users
+      tags:
+        - users
+      operationId: get-admin-users
+      description: Fork-specific administrator user-management alias. Returns users with team and account counts for the admin UI.
+      x-badges:
+        - color: orange
+          label: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    parameters: []
+  '/api/v1/admin/users/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: Get admin user details
+      tags:
+        - users
+      operationId: get-admin-users-id
+      x-badges:
+        - color: orange
+          label: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update admin user
+      tags:
+        - users
+      operationId: put-admin-users-id
+      x-badges:
+        - color: orange
+          label: admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Delete admin user
+      tags:
+        - users
+      operationId: delete-admin-users-id
+      x-badges:
+        - color: orange
+          label: admin
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   schemas:
     2FAccountStore:
@@ -2223,6 +3296,7 @@ components:
           enum:
             - totp
             - hotp
+            - steamtotp
           example: totp
           description: The type of 2FA account
         secret:
@@ -2327,6 +3401,7 @@ components:
               enum:
                 - totp
                 - hotp
+                - steamtotp
               example: totp
             secret:
               type:
@@ -2399,6 +3474,363 @@ components:
             - boolean
             - 'null'
           example: false
+    EncryptionSetup:
+      title: Encryption setup schema
+      type: object
+      properties:
+        encryption_salt:
+          type: string
+          maxLength: 255
+          example: 7ad7b84b8e8b40b3a9f6f8e3a2d1c0ab
+        encryption_test_value:
+          type: string
+          example: '{"ciphertext":"test","iv":"test","authTag":"test"}'
+        encryption_version:
+          type: integer
+          minimum: 1
+          example: 1
+      required:
+        - encryption_salt
+        - encryption_test_value
+        - encryption_version
+    EncryptionSetupResult:
+      title: Encryption setup result schema
+      type: object
+      properties:
+        message:
+          type: string
+          example: End-to-end encryption enabled successfully
+        encryption_enabled:
+          type: boolean
+          example: true
+      required:
+        - message
+        - encryption_enabled
+    EncryptionStatus:
+      title: Encryption status schema
+      type: object
+      properties:
+        encryption_enabled:
+          type: boolean
+          example: true
+        vault_locked:
+          type: boolean
+          example: false
+        encryption_version:
+          type:
+            - integer
+            - 'null'
+          example: 1
+      required:
+        - encryption_enabled
+    VaultLockResult:
+      title: Vault lock result schema
+      type: object
+      properties:
+        message:
+          type: string
+          example: Vault unlocked successfully
+        vault_locked:
+          type: boolean
+          example: false
+      required:
+        - message
+        - vault_locked
+    BackupExportRequest:
+      title: Backup export request schema
+      type: object
+      properties:
+        password:
+          type: string
+          format: password
+          minLength: 8
+        include_groups:
+          type: boolean
+          default: true
+      required:
+        - password
+    BackupExportResult:
+      title: Backup export result schema
+      type: object
+      properties:
+        filename:
+          type: string
+          example: 2fa-vault-backup-2026-05-08-153000.vault
+        size:
+          type: integer
+          minimum: 0
+        account_count:
+          type: integer
+          minimum: 0
+        group_count:
+          type: integer
+          minimum: 0
+      required:
+        - filename
+        - size
+        - account_count
+        - group_count
+    BackupImportRequest:
+      title: Backup import request schema
+      type: object
+      properties:
+        backup_file:
+          type: string
+          format: binary
+        format:
+          type: string
+          enum:
+            - vault
+            - json
+            - 2fauth
+            - auto
+        password:
+          type:
+            - string
+            - 'null'
+          format: password
+          minLength: 8
+        conflict_resolution:
+          type: string
+          enum:
+            - skip
+            - replace
+            - rename
+          default: skip
+        import_groups:
+          type: boolean
+          default: true
+      required:
+        - backup_file
+    BackupImportResult:
+      title: Backup import result schema
+      type: object
+      properties:
+        imported_count:
+          type: integer
+          minimum: 0
+        skipped_count:
+          type: integer
+          minimum: 0
+        failed_count:
+          type: integer
+          minimum: 0
+        errors:
+          type: array
+          items: {}
+        conflict_resolution:
+          type: string
+          enum:
+            - skip
+            - replace
+            - rename
+      required:
+        - imported_count
+        - failed_count
+    PushSubscriptionStore:
+      title: Push subscription store schema
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        p256dh:
+          type: string
+        auth:
+          type: string
+        content_encoding:
+          type: string
+          default: aesgcm
+      required:
+        - endpoint
+        - p256dh
+        - auth
+    PushSubscriptionRead:
+      title: Push subscription read schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        endpoint:
+          type: string
+          format: uri
+        created_at:
+          type: string
+      required:
+        - id
+        - endpoint
+        - created_at
+    TeamRole:
+      title: Team role schema
+      type: string
+      enum:
+        - owner
+        - admin
+        - member
+        - viewer
+    TeamStore:
+      title: Team store schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Operations
+      required:
+        - name
+    TeamRead:
+      title: Team read schema
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        owner_id:
+          type: integer
+        owner_name:
+          type:
+            - string
+            - 'null'
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        members_count:
+          type: integer
+          minimum: 0
+        shared_accounts_count:
+          type: integer
+          minimum: 0
+        pending_invitations:
+          type: integer
+          minimum: 0
+        invite_code:
+          type:
+            - string
+            - 'null'
+        created_at:
+          type: string
+      required:
+        - id
+        - name
+        - owner_id
+    TeamCollection:
+      title: Team collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamRead'
+    TeamMember:
+      title: Team member schema
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        joined_at:
+          type:
+            - string
+            - 'null'
+    TeamDetail:
+      allOf:
+        - $ref: '#/components/schemas/TeamRead'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/TeamMember'
+            stats:
+              type: object
+              additionalProperties: true
+    TeamInvitationStore:
+      title: Team invitation store schema
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum:
+            - admin
+            - member
+            - viewer
+          default: member
+      required:
+        - email
+    TeamInvitationRead:
+      title: Team invitation read schema
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        status:
+          type: string
+        expires_at:
+          type: string
+        created_at:
+          type: string
+    TeamInvitationCollection:
+      title: Team invitation collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/TeamInvitationRead'
+    SharedAccountStore:
+      title: Shared account store schema
+      type: object
+      properties:
+        twofaccount_id:
+          type: integer
+          minimum: 1
+        access_level:
+          type: string
+          enum:
+            - read
+            - write
+            - admin
+          default: read
+      required:
+        - twofaccount_id
+    SharedAccountRead:
+      title: Shared account read schema
+      type: object
+      properties:
+        id:
+          type: integer
+        twofaccount_id:
+          type: integer
+        account_service:
+          type: string
+        account_name:
+          type: string
+        shared_by:
+          type: string
+        shared_by_id:
+          type: integer
+        access_level:
+          type: string
+          enum:
+            - read
+            - write
+            - admin
+        created_at:
+          type: string
+    SharedAccountCollection:
+      title: Shared account collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/SharedAccountRead'
       required:
         - encryption_enabled
     2FAccountUpdate:
@@ -3211,6 +4643,18 @@ components:
                 message: bad request
                 reason:
                   param1: This request accept only one parameter
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Too many attempts. Please try again later.
+            required:
+              - message
     ServerError:
       description: Internal Server Error
       content:
@@ -3270,11 +4714,16 @@ components:
       description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FAuth instance to generate personal access tokens.
   requestBodies: {}
 tags:
+  - name: backups
+  - name: encryption
+  - name: features
   - name: groups
   - name: icons
   - name: one-time password
+  - name: push
   - name: qrcode
   - name: settings
+  - name: teams
   - name: twofaccounts
   - name: user
   - name: user preference

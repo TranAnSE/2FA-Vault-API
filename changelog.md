@@ -1,5 +1,21 @@
 # Change log
 
+## [1.10.0] - 2026-05-08
+
+### Added
+
+- 2FA-Vault fork metadata in the latest OpenAPI document
+- `/api/v1/twofaccounts/count` GET path
+- `/api/v1/twofaccounts/{id}/counter` PATCH path for HOTP counter sync
+- `/api/v1/encryption/setup`, `/salt`, `/status`, `/verify`, `/lock`, and `/disable` paths
+- `/api/v1/features` and `/api/v1/features/{name}` paths
+- `/api/v1/backups/*` encrypted backup paths
+- Legacy `/api/v1/backup/*` aliases
+- `/api/v1/push/*` web push subscription paths
+- `/api/v1/teams/*` team, invitation, member, and account-sharing paths
+- `/api/v1/admin/users/*` administrator UI aliases
+- `steamtotp` as a documented `otp_type`
+
 ## [1.9.0] - 2026-01-10
 
 ### Added
