@@ -45,7 +45,7 @@
 
 ### Added
 
-- New `otpauth` query parameter for the GET operation of path `/api/v1/twofaccounts/export` to force data export as otpauth URIs instead of the 2FAuth json format.
+- New `otpauth` query parameter for the GET operation of path `/api/v1/twofaccounts/export` to force data export as otpauth URIs instead of the 2FA-Vault json format.
 
 ## [1.5.0] - 2024-09-27
 

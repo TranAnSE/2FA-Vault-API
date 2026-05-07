@@ -2,12 +2,12 @@ openapi: 3.1.0
 x-stoplight:
   id: y6raplyxubnwa
 info:
-  title: 2FAuth API
+  title: 2FA-Vault API
   version: 1.0.0
   description: |-
-    This is the definition (following OpenAPI 3.1 specification) of the REST API of [2FAuth](https://github.com/Bubka/2FAuth), a web app to manage your Two-Factor Authentication (2FA) accounts and generate their security passwords.
+    This is the definition (following OpenAPI 3.1 specification) of the REST API of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault), a web app to manage your Two-Factor Authentication (2FA) accounts and generate their security passwords.
 
-    The API is available once you installed 2FAuth on your server.
+    The API is available once you installed 2FA-Vault on your server.
   contact:
     name: Bubka
     url: 'https://github.com/Bubka'
@@ -16,7 +16,7 @@ info:
     name: AGPL-3.0
     url: 'https://www.gnu.org/licenses/agpl-3.0.en.html'
 servers:
-  - url: 'https://demo.2fauth.app'
+  - url: 'https://demo.2fa-vault.app'
     description: Demo server
 paths:
   /api/v1/twofaccounts:
@@ -895,7 +895,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
       operationId: get-settings
-      description: List all settings. This includes 2FAuth native settings and possible additional user-defined settings.
+      description: List all settings. This includes 2FA-Vault native settings and possible additional user-defined settings.
     parameters: []
     post:
       summary: Create custom setting
@@ -953,7 +953,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: get-settings-name
-      description: 'Returns a single setting, whether it is a native 2FAuth setting or a custom setting'
+      description: 'Returns a single setting, whether it is a native 2FA-Vault setting or a custom setting'
     put:
       summary: Update setting
       operationId: put-settings-name
@@ -975,7 +975,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
-      description: 'Updates a setting, whether it is a native 2FAuth setting or a custom setting. Will create the setting if it does not exist.'
+      description: 'Updates a setting, whether it is a native 2FA-Vault setting or a custom setting. Will create the setting if it does not exist.'
       requestBody:
         content:
           application/json:
@@ -1604,7 +1604,7 @@ components:
     Bearer-Auth:
       type: http
       scheme: bearer
-      description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FAuth instance to generate personal access tokens.
+      description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FA-Vault instance to generate personal access tokens.
   requestBodies: {}
 tags:
   - name: groups

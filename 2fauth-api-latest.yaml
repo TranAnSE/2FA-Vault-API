@@ -3,9 +3,9 @@ info:
   title: 2FA-Vault API
   version: 1.10.0
   description: |-
-    This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FAuth](https://github.com/Bubka/2FAuth) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
+    This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 
-    2FA-Vault keeps the upstream 2FAuth account, group, icon, QR code, user preference, setting, and user-management endpoints, and adds fork-specific endpoints for encrypted vault metadata, encrypted account sync, encrypted backups, web push subscriptions, teams, and additional administrator user management.
+    2FA-Vault keeps the upstream 2FA-Vault account, group, icon, QR code, user preference, setting, and user-management endpoints, and adds fork-specific endpoints for encrypted vault metadata, encrypted account sync, encrypted backups, web push subscriptions, teams, and additional administrator user management.
   contact:
     name: TranAnSE
     url: 'https://github.com/TranAnSE/2FA-Vault'
@@ -769,7 +769,7 @@ paths:
                   schema:
                     type: integer
                     example: 1
-                    description: Schema version of the migration. Only available when data are exported using the 2FAuth format.
+                    description: Schema version of the migration. Only available when data are exported using the 2FA-Vault format.
                   datetime:
                     type: string
                     format: date-time
@@ -787,9 +787,9 @@ paths:
                   - datetime
                   - data
               examples:
-                Example (2FAuth format):
+                Example (2FA-Vault format):
                   value:
-                    app: 2fauth_v3.4.2
+                    app: 2FA-Vault_v3.4.2
                     schema: 1
                     datetime: '2023-03-22T11:11:33.299209Z'
                     data:
@@ -819,7 +819,7 @@ paths:
                         legacy_uri: 'otpauth://hotp/MySite:jane.doe?secret=GUKLZ8DCTA&issuer=AnotherSite'
                 Example (otpauth URIs):
                   value:
-                    app: 2fauth_v3.4.2
+                    app: 2FA-Vault_v3.4.2
                     datetime: '2023-03-22T11:11:33.299209Z'
                     data:
                       - uri: 'otpauth://totp/MySite:john.doe?secret=GJTGC5LUNA&issuer=MySite'
@@ -838,7 +838,7 @@ paths:
             type: boolean
           in: query
           name: otpauth
-          description: Force data to be exported as a list of otpauth URIs instead of the 2FAuth json format
+          description: Force data to be exported as a list of otpauth URIs instead of the 2FA-Vault json format
       tags:
         - twofaccounts
     parameters: []
@@ -1233,7 +1233,7 @@ paths:
       description: |-
         Use this endpoint to get the official icon of a given "service": A website, an app, a brand.
 
-        When this endpoint is requested, 2FAuth makes a single request to an external icons collection to get the icon of the posted service. If the icon is available, 2FAuth fetches and stores the file in its public icons directory `/storage/icons/`.
+        When this endpoint is requested, 2FA-Vault makes a single request to an external icons collection to get the icon of the posted service. If the icon is available, 2FA-Vault fetches and stores the file in its public icons directory `/storage/icons/`.
       requestBody:
         content:
           application/json:
@@ -1454,7 +1454,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
       operationId: get-settings
       description: |-
-        List all application settings. This includes 2FAuth native settings and possible additional admin-defined settings.
+        List all application settings. This includes 2FA-Vault native settings and possible additional admin-defined settings.
 
         Settings endpoints are restricted to user with an `Administrator` role.
       tags:
@@ -1529,7 +1529,7 @@ paths:
           $ref: '#/components/responses/NotFound'
       operationId: get-settings-name
       description: |-
-        Returns a single application setting, whether it is a native 2FAuth setting or a custom setting.
+        Returns a single application setting, whether it is a native 2FA-Vault setting or a custom setting.
 
         Settings endpoints are restricted to user with an `Administrator` role.
       tags:
@@ -1561,7 +1561,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
       description: |-
-        Updates an application setting, whether it is a native 2FAuth setting or a custom setting. Will create the setting if it does not exist.
+        Updates an application setting, whether it is a native 2FA-Vault setting or a custom setting. Will create the setting if it does not exist.
 
         Settings endpoints are restricted to user with an `Administrator` role.
       requestBody:
@@ -3582,7 +3582,7 @@ components:
           enum:
             - vault
             - json
-            - 2fauth
+            - 2FA-Vault
             - auto
         password:
           type:
@@ -4711,7 +4711,7 @@ components:
     Bearer-Auth:
       type: http
       scheme: bearer
-      description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FAuth instance to generate personal access tokens.
+      description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FA-Vault instance to generate personal access tokens.
   requestBodies: {}
 tags:
   - name: backups
