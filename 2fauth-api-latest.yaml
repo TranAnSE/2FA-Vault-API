@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: 2FA-Vault API
-  version: 1.10.0
+  version: 1.1.0
   description: |-
     This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 
-    2FA-Vault keeps the upstream 2FA-Vault account, group, icon, QR code, user preference, setting, and user-management endpoints, and adds fork-specific endpoints for encrypted vault metadata, encrypted account sync, encrypted backups, web push subscriptions, teams, and additional administrator user management.
+    2FA-Vault keeps the upstream 2FA-Vault account, group, icon, QR code, user preference, setting, and user-management endpoints, and adds fork-specific endpoints for encrypted vault metadata, encrypted account sync, encrypted backups, web push subscriptions, teams, tags, vaults, webhooks, team activity logs, emergency access, and additional administrator user management.
   contact:
     name: TranAnSE
     url: 'https://github.com/TranAnSE/2FA-Vault'
@@ -119,6 +119,85 @@ paths:
           in: query
           name: withOtp
           description: Set to true (or 1) to append an OTP object to the returned 2FA accounts of type TOTP
+        - schema:
+            type: string
+          in: query
+          name: q
+          description: Full-text search on service and account name
+        - schema:
+            type: string
+            example: 'totp,hotp,steamtotp'
+          in: query
+          name: types
+          description: Comma-separated OTP types to filter (totp, hotp, steamtotp)
+        - schema:
+            type: string
+            example: 'sha1,sha256,sha512'
+          in: query
+          name: algorithms
+          description: Comma-separated algorithms to filter
+        - schema:
+            type: string
+            example: '6,7,8'
+          in: query
+          name: digits
+          description: Comma-separated digit counts to filter
+        - schema:
+            type: integer
+          in: query
+          name: group_id
+          description: Filter by group ID
+        - schema:
+            type: string
+            example: '1,2,3'
+          in: query
+          name: tags
+          description: Comma-separated tag IDs to filter
+        - schema:
+            type: string
+            enum:
+              - and
+              - 'or'
+            default: 'or'
+          in: query
+          name: tag_mode
+          description: Tag filter mode (and = all tags, or = any tag)
+        - schema:
+            type: boolean
+          in: query
+          name: encrypted
+          description: Filter by encryption status
+        - schema:
+            type: string
+            format: date-time
+          in: query
+          name: last_used_from
+          description: Filter accounts used after this date
+        - schema:
+            type: string
+            format: date-time
+          in: query
+          name: last_used_to
+          description: Filter accounts used before this date
+        - schema:
+            type: string
+            enum:
+              - service
+              - account
+              - created_at
+              - last_used_at
+              - order_column
+          in: query
+          name: sort
+          description: Sort field
+        - schema:
+            type: string
+            enum:
+              - asc
+              - desc
+          in: query
+          name: sort_dir
+          description: Sort direction
     parameters: []
     post:
       summary: Create 2FA account
@@ -842,6 +921,763 @@ paths:
       tags:
         - twofaccounts
     parameters: []
+  /api/v1/tags:
+    get:
+      summary: List user's tags
+      tags:
+        - tags
+      operationId: get-tags
+      description: Returns all tags created by the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Create tag
+      tags:
+        - tags
+      operationId: post-tags
+      description: Creates a new tag for the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/tags/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    put:
+      summary: Update tag
+      tags:
+        - tags
+      operationId: put-tags-id
+      description: Updates a tag of the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Delete tag
+      tags:
+        - tags
+      operationId: delete-tags-id
+      description: Deletes a tag of the authenticated user.
+      responses:
+        '204':
+          description: No Content
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/twofaccounts/{id}/tags':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Sync account tags
+      tags:
+        - tags
+        - twofaccounts
+      operationId: post-twofaccounts-id-tags
+      description: Synchronizes tags for a 2FA account of the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  description: Array of tag IDs to assign to the account
+                  items:
+                    type: integer
+                    minimum: 1
+              required:
+                - tags
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/2FAccountRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/vaults:
+    get:
+      summary: List vaults
+      tags:
+        - vaults
+      operationId: get-vaults
+      description: Returns all vaults for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create vault
+      tags:
+        - vaults
+      operationId: post-vaults
+      description: Creates a new vault for the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/vaults/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    put:
+      summary: Update vault
+      tags:
+        - vaults
+      operationId: put-vaults-id
+      description: Updates a vault of the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Delete vault
+      tags:
+        - vaults
+      operationId: delete-vaults-id
+      description: Deletes a vault of the authenticated user.
+      responses:
+        '204':
+          description: No Content
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/vaults/{id}/lock':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Lock vault
+      tags:
+        - vaults
+      operationId: post-vaults-id-lock
+      description: Locks a vault for the authenticated user.
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/vaults/{id}/encryption':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Set vault encryption
+      tags:
+        - vaults
+      operationId: post-vaults-id-encryption
+      description: Sets encryption parameters for a vault of the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                salt:
+                  type: string
+                  description: Encryption salt for the vault
+                test_value:
+                  type: string
+                  description: Encrypted test value for verification
+              required:
+                - salt
+                - test_value
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/webhooks/events:
+    get:
+      summary: List webhook event types
+      tags:
+        - webhooks
+      operationId: get-webhooks-events
+      description: Returns available webhook event types.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                    label:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/webhooks:
+    get:
+      summary: List webhooks
+      tags:
+        - webhooks
+      operationId: get-webhooks
+      description: Returns all webhooks for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create webhook
+      tags:
+        - webhooks
+      operationId: post-webhooks
+      description: Creates a new webhook for the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/webhooks/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    put:
+      summary: Update webhook
+      tags:
+        - webhooks
+      operationId: put-webhooks-id
+      description: Updates a webhook of the authenticated user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      summary: Delete webhook
+      tags:
+        - webhooks
+      operationId: delete-webhooks-id
+      description: Deletes a webhook of the authenticated user.
+      responses:
+        '204':
+          description: No Content
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/webhooks/{id}/test':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Test webhook
+      tags:
+        - webhooks
+      operationId: post-webhooks-id-test
+      description: Sends a test event to a webhook.
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/webhooks/{id}/deliveries':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: List webhook deliveries
+      tags:
+        - webhooks
+      operationId: get-webhooks-id-deliveries
+      description: Returns delivery history for a webhook.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDeliveryCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/activity':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: Get team activity log
+      tags:
+        - teams
+      operationId: get-teams-id-activity
+      description: Returns paginated activity log for a team.
+      parameters:
+        - name: actions
+          in: query
+          schema:
+            type: string
+          description: Comma-separated list of action types to filter
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by user ID
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for activity log
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for activity log
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: Pagination page number
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: Results per page
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamActivityLogCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/activity/export':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: Export team activity log
+      tags:
+        - teams
+      operationId: get-teams-id-activity-export
+      description: Exports activity log as JSON file.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/emergency-contacts:
+    get:
+      summary: List emergency contacts
+      tags:
+        - emergency-access
+      operationId: get-emergency-contacts
+      description: Returns all emergency contacts for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContactCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create emergency contact
+      tags:
+        - emergency-access
+      operationId: post-emergency-contacts
+      description: Creates a new emergency contact.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyContactStore'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyContactRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/emergency-contacts/{id}':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    delete:
+      summary: Delete emergency contact
+      tags:
+        - emergency-access
+      operationId: delete-emergency-contacts-id
+      description: Deletes an emergency contact.
+      responses:
+        '204':
+          description: No Content
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/emergency-contacts/for-me:
+    get:
+      summary: Get emergency access references
+      tags:
+        - emergency-access
+      operationId: get-emergency-contacts-for-me
+      description: Returns emergency contacts who have designated the authenticated user as their emergency contact.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyAccessReferenceCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/emergency-requests/pending:
+    get:
+      summary: List pending emergency requests
+      tags:
+        - emergency-access
+      operationId: get-emergency-requests-pending
+      description: Returns pending emergency access requests for the authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestCollection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  '/api/v1/emergency-contacts/{contactId}/request':
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      summary: Request emergency access
+      tags:
+        - emergency-access
+      operationId: post-emergency-contacts-contactId-request
+      description: Submits an emergency access request to a contact.
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyRequestRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/emergency-requests/{requestId}/approve':
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      summary: Approve emergency request
+      tags:
+        - emergency-access
+      operationId: post-emergency-requests-requestId-approve
+      description: Approves an emergency access request and grants access.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                encrypted_key:
+                  type: string
+                  description: Encrypted key for vault access
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/emergency-requests/{requestId}/deny':
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      summary: Deny emergency request
+      tags:
+        - emergency-access
+      operationId: post-emergency-requests-requestId-deny
+      description: Denies an emergency access request.
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/share-encrypted':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Share encrypted account with team
+      tags:
+        - teams
+      operationId: post-teams-id-share-encrypted
+      description: Shares an account with team members using E2EE key wrapping.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncryptedShareStore'
+      responses:
+        '201':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  '/api/v1/teams/{id}/members/{userId}/public-key':
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      summary: Get member's public key
+      tags:
+        - teams
+      operationId: get-teams-id-members-userId-public-key
+      description: Returns the public key of a team member for E2EE key wrapping.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicKeyRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/user/public-key:
+    post:
+      summary: Set user public key
+      tags:
+        - user
+      operationId: post-user-public-key
+      description: Stores the user's public key for E2EE key sharing.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                public_key:
+                  type: string
+                  description: Public key for E2EE key wrapping
+              required:
+                - public_key
+      responses:
+        '200':
+          $ref: '#/components/responses/OK'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/admin/rate-limits:
+    get:
+      summary: Get rate limit statistics
+      tags:
+        - users
+      operationId: get-admin-rate-limits
+      description: Returns rate limit statistics and top consumers. Admin only.
+      x-badges:
+        - color: orange
+          label: admin
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum:
+              - 24h
+              - 7d
+              - 30d
+            default: 24h
+          description: Time period for statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitDashboard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/groups:
     get:
       summary: Get all groups
@@ -3357,6 +4193,17 @@ components:
               example: 1
               description: ID of the 2FA account
               minimum: 1
+            last_used_at:
+              type:
+                - string
+                - 'null'
+              format: date-time
+              description: ISO8601 timestamp of last use
+            tags:
+              type: array
+              description: Tags assigned to this account
+              items:
+                $ref: '#/components/schemas/TagRead'
           required:
             - id
         - $ref: '#/components/schemas/2FAccountStore'
@@ -4451,6 +5298,544 @@ components:
             login_successful: true
             duration: 8 seconds
             login_method: password
+    Tag:
+      title: Tag schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          maxLength: 64
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          example: '#FF5733'
+      required:
+        - id
+        - name
+    TagRead:
+      allOf:
+        - $ref: '#/components/schemas/Tag'
+        - type: object
+          properties:
+            accounts_count:
+              type: integer
+              minimum: 0
+              description: Number of accounts with this tag
+    TagStore:
+      title: Store Tag schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          description: Tag name
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          description: Tag color in hex format
+      required:
+        - name
+    TagUpdate:
+      title: Update Tag schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 64
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+    TagCollection:
+      title: Tag Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/TagRead'
+    Vault:
+      title: Vault schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          maxLength: 255
+        is_default:
+          type: boolean
+        is_locked:
+          type: boolean
+        accounts_count:
+          type: integer
+          minimum: 0
+        groups_count:
+          type: integer
+          minimum: 0
+        last_opened_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+      required:
+        - id
+        - name
+        - is_default
+        - is_locked
+    VaultRead:
+      $ref: '#/components/schemas/Vault'
+    VaultStore:
+      title: Store Vault schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: Vault name
+      required:
+        - name
+    VaultUpdate:
+      title: Update Vault schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+    VaultCollection:
+      title: Vault Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/VaultRead'
+    Webhook:
+      title: Webhook schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          maxLength: 255
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+        last_triggered_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deliveries_count:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - name
+        - url
+        - events
+        - is_active
+    WebhookRead:
+      $ref: '#/components/schemas/Webhook'
+    WebhookStore:
+      title: Store Webhook schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: Webhook name
+        url:
+          type: string
+          format: uri
+          description: Webhook endpoint URL
+        events:
+          type: array
+          description: Event types to subscribe to
+          items:
+            type: string
+        secret:
+          type:
+            - string
+            - 'null'
+          description: Optional secret for HMAC signature
+      required:
+        - name
+        - url
+        - events
+    WebhookUpdate:
+      title: Update Webhook schema
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        is_active:
+          type: boolean
+    WebhookCollection:
+      title: Webhook Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/WebhookRead'
+    WebhookDelivery:
+      title: Webhook Delivery schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        event:
+          type: string
+        status_code:
+          type: integer
+        success:
+          type: boolean
+        attempt:
+          type: integer
+          minimum: 1
+        delivered_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - event
+        - success
+    WebhookDeliveryCollection:
+      title: Webhook Delivery Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/WebhookDelivery'
+    TeamActivityLog:
+      title: Team Activity Log schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            email:
+              type: string
+        action:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        target_user:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        target_account:
+          type:
+            - object
+            - 'null'
+          properties:
+            id:
+              type: integer
+            service:
+              type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - user
+        - action
+        - created_at
+    TeamActivityLogCollection:
+      title: Team Activity Log Collection schema
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamActivityLog'
+        last_page:
+          type: integer
+        current_page:
+          type: integer
+        total:
+          type: integer
+      required:
+        - data
+        - current_page
+    EmergencyContact:
+      title: Emergency Contact schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum:
+            - active
+            - pending
+            - revoked
+        access_type:
+          type: string
+          enum:
+            - view_only
+            - full_access
+        wait_days:
+          type: integer
+          enum:
+            - 7
+            - 14
+            - 30
+            - 60
+            - 90
+        trusted_user:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        pending_requests:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - email
+        - status
+        - access_type
+        - wait_days
+    EmergencyContactRead:
+      $ref: '#/components/schemas/EmergencyContact'
+    EmergencyContactStore:
+      title: Store Emergency Contact schema
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Emergency contact email
+        wait_days:
+          type: integer
+          enum:
+            - 7
+            - 14
+            - 30
+            - 60
+            - 90
+          description: Days to wait before access is granted
+        access_type:
+          type: string
+          enum:
+            - view_only
+            - full_access
+          description: Type of access granted
+      required:
+        - email
+        - wait_days
+        - access_type
+    EmergencyContactCollection:
+      title: Emergency Contact Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/EmergencyContactRead'
+    EmergencyAccessReference:
+      title: Emergency Access Reference schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+        access_type:
+          type: string
+        wait_days:
+          type: integer
+        owner:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            email:
+              type: string
+      required:
+        - id
+        - email
+        - status
+        - owner
+    EmergencyAccessReferenceCollection:
+      title: Emergency Access Reference Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/EmergencyAccessReference'
+    EmergencyRequest:
+      title: Emergency Request schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        contact:
+          type: object
+          properties:
+            id:
+              type: integer
+            email:
+              type: string
+        requester:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - denied
+            - expired
+        requested_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - contact
+        - requester
+        - status
+        - requested_at
+    EmergencyRequestRead:
+      $ref: '#/components/schemas/EmergencyRequest'
+    EmergencyRequestCollection:
+      title: Emergency Request Collection schema
+      type: array
+      items:
+        $ref: '#/components/schemas/EmergencyRequestRead'
+    EncryptedShareStore:
+      title: Encrypted Share schema
+      type: object
+      properties:
+        twofaccount_id:
+          type: integer
+          minimum: 1
+          description: ID of the 2FA account to share
+        access_level:
+          type: string
+          enum:
+            - read
+            - write
+          description: Access level for shared account
+        member_keys:
+          type: array
+          description: Wrapped encryption keys for team members
+          items:
+            type: object
+            properties:
+              member_id:
+                type: integer
+                minimum: 1
+              wrapped_key:
+                type: string
+                description: Member's wrapped encryption key
+            required:
+              - member_id
+              - wrapped_key
+      required:
+        - twofaccount_id
+        - access_level
+        - member_keys
+    PublicKey:
+      title: Public Key schema
+      type: object
+      properties:
+        user_id:
+          type: integer
+        name:
+          type: string
+        public_key:
+          type: string
+          description: Public key for E2EE key wrapping
+      required:
+        - user_id
+        - public_key
+    PublicKeyRead:
+      $ref: '#/components/schemas/PublicKey'
+    RateLimitDashboard:
+      title: Rate Limit Dashboard schema
+      type: object
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total requests in period
+        limited:
+          type: integer
+          minimum: 0
+          description: Number of rate-limited requests
+        topConsumers:
+          type: array
+          items:
+            type: object
+            properties:
+              ip_address:
+                type: string
+              user_id:
+                type:
+                  - integer
+                  - 'null'
+              hit_count:
+                type: integer
+        topEndpoints:
+          type: array
+          items:
+            type: object
+            properties:
+              endpoint:
+                type: string
+              hit_count:
+                type: integer
+        hourly:
+          type: array
+          items:
+            type: object
+            properties:
+              hour:
+                type: string
+              count:
+                type: integer
+      required:
+        - total
+        - limited
+        - topConsumers
+        - topEndpoints
   parameters:
     id:
       name: id
@@ -4715,6 +6100,7 @@ components:
   requestBodies: {}
 tags:
   - name: backups
+  - name: emergency-access
   - name: encryption
   - name: features
   - name: groups
@@ -4723,10 +6109,13 @@ tags:
   - name: push
   - name: qrcode
   - name: settings
+  - name: tags
   - name: teams
   - name: twofaccounts
   - name: user
   - name: user preference
   - name: users
+  - name: vaults
+  - name: webhooks
 security:
   - Bearer-Auth: []
