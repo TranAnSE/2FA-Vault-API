@@ -1,5 +1,20 @@
 # Change log
 
+## [1.11.0] - 2026-06-14
+
+Companion spec bump for the **2FA-Vault v1.2.0 feature release**. The paths and schemas below back the v1.2.0 features: Account Notes (`notes`), Favorites/Pinned (`is_pinned`), Personal Audit Log (`activity`), Auto-Backup (`backup-destinations`), Email Invitations (`invitations`), Session Management (`sessions`), Secure Notes (`secure-notes`), and Prometheus observability (`metrics`).
+
+### Added
+
+- `notes` (string, nullable) and `is_pinned` (boolean) properties to the `2FAccountStore`, `2FAccountUpdate`, and `2FAccountRead` schemas
+- `PersonalActivityLog` schema and `/api/v1/user/activity` GET + DELETE paths
+- `UserSession` schema and `/api/v1/user/sessions` GET + `/api/v1/user/sessions/{id}` DELETE paths
+- `UserInvitation` + `UserInvitationStore` schemas and `/api/v1/user/invitations` GET + POST + `/api/v1/user/invitations/{id}` DELETE paths (admin only)
+- `UserBackupDestination` + `UserBackupDestinationStore` schemas and `/api/v1/user/backup-destinations` GET + POST + `/{id}` PUT + DELETE + `/{id}/test` POST paths
+- `SecureNote` + `SecureNoteStore` schemas and `/api/v1/secure-notes` GET + POST + `/{id}` PUT + DELETE + `/{id}/pin` POST paths
+- `/metrics` GET path (Prometheus text exposition format; IP allowlist or bearer token auth)
+- New tags: `activity`, `backup-destinations`, `invitations`, `metrics`, `secure-notes`, `sessions`
+
 ## [1.10.0] - 2026-05-08
 
 ### Added
