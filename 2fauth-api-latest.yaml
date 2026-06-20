@@ -6988,13 +6988,12 @@ components:
               errors:
                 description: A collection of fields with their respective errors
                 type: object
-                properties:
-                  fieldName:
-                    type: array
-                    description: A field with errors
-                    items:
-                      type: string
-                      example: The field2 must be a number
+                additionalProperties:
+                  type: array
+                  description: A field with errors
+                  items:
+                    type: string
+                    example: The field2 must be a number
             required:
               - message
               - errors
