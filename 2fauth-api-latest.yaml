@@ -552,6 +552,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: Breach monitoring is disabled (opt-in preference not set)
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
       operationId: post-breach-check-email
       description: >-
         Sends the email to HaveIBeenPwned. HARD-gated behind the user's
@@ -580,6 +582,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
       operationId: get-breach-check-service
       description: >-
         Uses the public HIBP breaches list; sends only a public service/domain
@@ -701,6 +705,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
       operationId: post-twofaccounts-otp
       description: Returns a fresh One-Time password with related parameters for account defined by the provided data
   /api/v1/twofaccounts/migration:
@@ -2372,6 +2378,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/ServerError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
       tags:
         - qrcode
     parameters: []
@@ -4535,6 +4543,27 @@ paths:
   '/api/v1/secure-notes/{id}':
     parameters:
       - $ref: '#/components/parameters/id'
+    get:
+      summary: Get a single secure note
+      tags:
+        - secure-notes
+      operationId: get-secure-note
+      description: Returns a single secure note owned by the authenticated user. The title and content are end-to-end encrypted; the server returns opaque ciphertext.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecureNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - Bearer-Auth: []
     put:
       summary: Update a secure note
       tags:
@@ -6709,9 +6738,12 @@ components:
           description: Outcome of the last backup run, or null if never run
         config_summary:
           type:
-            - string
+            - object
             - 'null'
-          description: Masked, non-sensitive summary of the connection (e.g. bucket name, host). Secrets are omitted.
+          description: >-
+            Object whose shape depends on the destination type (s3: {bucket,region,path,folder}, webdav: {url,path}, ...).
+            Masked, non-sensitive summary of the connection. Secrets are omitted.
+          additionalProperties: true
       required:
         - id
         - label
@@ -7130,11 +7162,15 @@ components:
       description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FA-Vault instance to generate personal access tokens.
   requestBodies: {}
 tags:
+  - name: account health
+    description: Account health monitoring (duplicates, unused accounts, weak secrets)
   - name: activity
     description: Personal activity log of the authenticated user
   - name: backups
   - name: backup-destinations
     description: Auto-backup destination configuration for the authenticated user
+  - name: breach monitoring
+    description: HIBP breach monitoring for emails and services
   - name: emergency-access
   - name: encryption
   - name: features
