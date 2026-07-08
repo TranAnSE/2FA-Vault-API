@@ -474,6 +474,120 @@ paths:
           $ref: '#/components/responses/NotFound'
       operationId: get-twofaccounts-id-qrcode
       description: Returns a QR code that represents a 2FA account owned by the authenticated user
+  '/api/v1/twofaccounts/health/summary':
+    get:
+      summary: Vault health summary
+      tags:
+        - account health
+      security:
+        - Bearer-Auth: []
+      responses:
+        '200':
+          description: Aggregated health across the authenticated user's accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountHealthSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: get-twofaccounts-health-summary
+      description: >-
+        Computes per-grade counts, average server-visible health score, and the
+        list of weak account ids (grade C or below). Uses server-visible metadata
+        only; safe under E2EE.
+  '/api/v1/twofaccounts/{id}/health':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: Account health score
+      tags:
+        - account health
+      security:
+        - Bearer-Auth: []
+      responses:
+        '200':
+          description: Per-account health score
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get-twofaccounts-id-health
+      description: >-
+        Security health score derived from server-visible metadata (algorithm,
+        digits, period, last-used freshness). Safe under E2EE.
+  '/api/v1/breach/check-email':
+    post:
+      summary: Check an email against known breaches
+      tags:
+        - breach monitoring
+      security:
+        - Bearer-Auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                use_account_email:
+                  type: boolean
+                  description: When true, use the authenticated user's own email (email field ignored).
+      responses:
+        '200':
+          description: Breach status for the email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreachResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Breach monitoring is disabled (opt-in preference not set)
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      operationId: post-breach-check-email
+      description: >-
+        Sends the email to HaveIBeenPwned. HARD-gated behind the user's
+        breachMonitoring preference (off by default) for privacy.
+  '/api/v1/breach/check-service':
+    get:
+      summary: Check a service/domain against known breaches
+      tags:
+        - breach monitoring
+      security:
+        - Bearer-Auth: []
+      parameters:
+        - name: service
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Breach status for the service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreachResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      operationId: get-breach-check-service
+      description: >-
+        Uses the public HIBP breaches list; sends only a public service/domain
+        name. No opt-in required.
   '/api/v1/twofaccounts/{id}/otp':
     parameters:
       - $ref: '#/components/parameters/id'
@@ -4654,6 +4768,12 @@ components:
             - 'null'
           description: Optional free-form notes for the account. Encrypted at rest when E2EE is enabled.
           maxLength: 1024
+        recovery_codes:
+          type:
+            - string
+            - 'null'
+          description: 'JSON-encoded array of the account''s external-service backup codes (e.g. GitHub recovery codes). Encrypted at rest; under E2EE the client sends an opaque ciphertext blob. Omit on store/update to preserve the existing value, send null/empty to clear it.'
+          example: '["abcd-1234","efgh-5678"]'
       required:
         - account
         - otp_type
@@ -5375,6 +5495,92 @@ components:
           algorithm: sha1
           period: 30
           counter: null
+    BreachResult:
+      title: BreachResult schema
+      type: object
+      description: Result of a breach check (email or service)
+      properties:
+        breached:
+          type: boolean
+        count:
+          type: integer
+        breaches:
+          type: array
+          items:
+            type: object
+        source:
+          type: string
+          enum: [hibp, unknown]
+          description: 'hibp = checked against HIBP; unknown = service unavailable'
+      required:
+        - breached
+        - count
+        - source
+    AccountHealth:
+      title: AccountHealth schema
+      type: object
+      description: Per-account security health score from server-visible metadata
+      properties:
+        id:
+          type: integer
+          description: ID of the 2FA account
+        algorithm_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        digits_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        freshness_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        period_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        server_total:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Weighted server-visible score
+        grade:
+          type: string
+          enum: [A, B, C, D, F]
+      required:
+        - id
+        - server_total
+        - grade
+    AccountHealthSummary:
+      title: AccountHealthSummary schema
+      type: object
+      description: Aggregated vault health across the user's accounts
+      properties:
+        total:
+          type: integer
+        grade_counts:
+          type: object
+          properties:
+            A: { type: integer }
+            B: { type: integer }
+            C: { type: integer }
+            D: { type: integer }
+            F: { type: integer }
+        average_server_total:
+          type: integer
+          minimum: 0
+          maximum: 100
+        weak_account_ids:
+          type: array
+          description: IDs of accounts graded C or below
+          items:
+            type: integer
+      required:
+        - total
+        - grade_counts
+        - average_server_total
+        - weak_account_ids
     Otp:
       title: Otp schema
       type: object
@@ -6956,11 +7162,15 @@ components:
       description: Provide your bearer token in the Authorization header when making requests to protected resources. See the 'Settings > OAuth' section of your 2FA-Vault instance to generate personal access tokens.
   requestBodies: {}
 tags:
+  - name: account health
+    description: Account health monitoring (duplicates, unused accounts, weak secrets)
   - name: activity
     description: Personal activity log of the authenticated user
   - name: backups
   - name: backup-destinations
     description: Auto-backup destination configuration for the authenticated user
+  - name: breach monitoring
+    description: HIBP breach monitoring for emails and services
   - name: emergency-access
   - name: encryption
   - name: features
