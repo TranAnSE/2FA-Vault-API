@@ -4662,6 +4662,81 @@ paths:
                     http_requests_total{status="200"} 1337
         '404':
           description: Not Found (metrics endpoint disabled)
+
+webhooks:
+  2FA-Vault Events:
+    post:
+      summary: Outbound webhook delivery
+      description: |
+        When an event the user has subscribed to occurs, 2FA-Vault delivers a
+        signed POST request to each active webhook's URL. The body is JSON with
+        an `event` discriminator, an ISO-8601 `timestamp`, and event-specific
+        `data`. The request carries two custom headers:
+
+        - `X-2FA-Vault-Event`: the event name (same value as `body.event`).
+        - `X-2FA-Vault-Signature`: `sha256=` followed by the lowercase hex
+          HMAC-SHA-256 of the raw request body, keyed by the webhook's secret.
+          Recipients SHOULD verify this signature before trusting the payload.
+
+        Recipients SHOULD respond with a 2xx status code; deliveries are
+        retried with limited attempts. Subscribed events are configured per
+        webhook via `POST /api/v1/webhooks` (see the `webhooks` tag).
+
+        Supported event names (see the `WebhookEvent` enum):
+
+        | Event | When it fires |
+        | --- | --- |
+        | `account.created` | A new 2FA account is created |
+        | `account.updated` | A 2FA account is edited |
+        | `account.deleted` | A 2FA account is deleted |
+        | `account.otp_generated` | An OTP is generated for an account |
+        | `team.created` | A team is created |
+        | `team.deleted` | A team is deleted |
+        | `team.member_joined` | A user joins a team |
+        | `team.member_left` | A user leaves a team |
+        | `team.account_shared` | An account is shared with a team |
+        | `team.account_unshared` | An account is unshared from a team |
+        | `auth.user_login` | A user signs in |
+        | `vault.locked` | The vault is locked |
+        | `vault.unlocked` | The vault is unlocked |
+      operationId: receive-webhook-event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookDeliveryPayload'
+            examples:
+              account.created:
+                summary: account.created
+                value:
+                  event: account.created
+                  timestamp: '2026-08-05T12:34:56+00:00'
+                  data:
+                    account_id: 42
+                    service: GitHub
+                    account: alice@example.com
+              team.account_shared:
+                summary: team.account_shared
+                value:
+                  event: team.account_shared
+                  timestamp: '2026-08-05T12:34:56+00:00'
+                  data:
+                    team_id: 7
+                    account_id: 42
+                    shared_by: 3
+              auth.user_login:
+                summary: auth.user_login
+                value:
+                  event: auth.user_login
+                  timestamp: '2026-08-05T12:34:56+00:00'
+                  data:
+                    user_id: 3
+      responses:
+        '200':
+          description: Delivery acknowledged. Any 2xx response is treated as success.
+        '400':
+          description: The recipient rejected the payload (still counts as attempted).
 components:
   schemas:
     2FAccountStore:
@@ -6184,6 +6259,44 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/WebhookRead'
+    WebhookDeliveryPayload:
+      title: Webhook Delivery Payload schema
+      description: >
+        The JSON body 2FA-Vault POSTs to a configured webhook URL when a
+        subscribed event fires. The `event` field is the discriminator; `data`
+        is event-specific (account ids, team ids, user ids). The body is signed
+        with HMAC-SHA-256 (see the X-2FA-Vault-Signature header).
+      type: object
+      properties:
+        event:
+          type: string
+          description: The event name (one of the WebhookEvent enum values).
+          enum:
+            - account.created
+            - account.updated
+            - account.deleted
+            - account.otp_generated
+            - team.created
+            - team.deleted
+            - team.member_joined
+            - team.member_left
+            - team.account_shared
+            - team.account_unshared
+            - auth.user_login
+            - vault.locked
+            - vault.unlocked
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred (ISO-8601).
+        data:
+          type: object
+          description: Event-specific payload (account/team/user identifiers and details).
+          additionalProperties: true
+      required:
+        - event
+        - timestamp
+        - data
     WebhookDelivery:
       title: Webhook Delivery schema
       type: object
