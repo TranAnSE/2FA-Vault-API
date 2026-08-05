@@ -1,5 +1,12 @@
 # Change log
 
+> **Snapshot policy note:** Versioned `2fauth-api-v<x.y.z>.yaml` snapshots are
+> committed for each release. The `v1.9.0` and `v1.10.0` snapshots were not
+> preserved on disk at their release time (their changelog entries below
+> describe what changed). The `2fauth-api-latest.yaml` always mirrors the
+> newest released version, and the public docs API viewer reflects the
+> snapshots that actually exist.
+
 ## [1.11.0] - 2026-06-14
 
 Companion spec bump for the **2FA-Vault v1.2.0 feature release**. The paths and schemas below back the v1.2.0 features: Account Notes (`notes`), Favorites/Pinned (`is_pinned`), Personal Audit Log (`activity`), Auto-Backup (`backup-destinations`), Email Invitations (`invitations`), Session Management (`sessions`), Secure Notes (`secure-notes`), and Prometheus observability (`metrics`).
