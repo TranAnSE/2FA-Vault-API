@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 2FA-Vault API
-  version: 1.11.0
+  version: 1.13.0
   description: |-
     This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 

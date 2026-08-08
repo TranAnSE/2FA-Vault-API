@@ -7,6 +7,26 @@
 > newest released version, and the public docs API viewer reflects the
 > snapshots that actually exist.
 
+## [1.13.0] - 2026-08-08
+
+Companion spec bump for the **2FA-Vault v1.3.0 release**. Reconciles the spec against the live Laravel route table (now verified by `php artisan 2fauth:openapi-drift`, which reports 0 drift) and documents the outbound webhook payloads via the OpenAPI `webhooks:` keyword.
+
+### Added
+
+- `patch` operations on `/twofaccounts/{id}`, `/groups/{id}`, `/tags/{id}`, `/secure-notes/{id}` (the apiResource partial-update verb, previously undocumented).
+- `patch /twofaccounts/{id}/owner` — direct 2FA account ownership transfer.
+- `post /teams/{id}/transfer` — team ownership transfer for offboarding.
+- `get` + `delete /otp-logs` (OTP generation audit log) and the `OtpLog` schema.
+- A top-level `webhooks:` section modeling the 13 outbound event deliveries (event/timestamp/data body, `X-2FA-Vault-Event` and `X-2FA-Vault-Signature` headers, full `WebhookEvent` enum table) and a `WebhookDeliveryPayload` schema.
+
+### Removed
+
+- `post /secure-notes/{id}/pin` — no pin route is registered; secure-notes is a plain apiResource. (Documented only; never shipped.)
+
+### Fixed
+
+- `2fauth-api-v1.11.0.yaml` snapshot resynced to the corrected content.
+
 ## [1.11.0] - 2026-06-14
 
 Companion spec bump for the **2FA-Vault v1.2.0 feature release**. The paths and schemas below back the v1.2.0 features: Account Notes (`notes`), Favorites/Pinned (`is_pinned`), Personal Audit Log (`activity`), Auto-Backup (`backup-destinations`), Email Invitations (`invitations`), Session Management (`sessions`), Secure Notes (`secure-notes`), and Prometheus observability (`metrics`).
