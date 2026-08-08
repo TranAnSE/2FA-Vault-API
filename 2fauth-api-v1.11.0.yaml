@@ -425,6 +425,32 @@ paths:
                   period: 30
       tags:
         - twofaccounts
+    patch:
+      summary: Partially update 2FA account
+      operationId: patch-twofaccounts-id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/2FAccountRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      description: Partially updates a 2FA account of the authenticated user (apiResource PATCH update)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/2FAccountUpdate'
+      tags:
+        - twofaccounts
     delete:
       summary: Delete 2FA account
       operationId: delete-twofaccounts-id
@@ -438,6 +464,30 @@ paths:
       tags:
         - twofaccounts
       description: Deletes a 2FA account of the authenticated user
+  '/api/v1/twofaccounts/{id}/owner':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    patch:
+      summary: Transfer account ownership
+      tags:
+        - twofaccounts
+      operationId: patch-twofaccounts-id-owner
+      description: Transfers ownership of a 2FA account to another user (direct ownership transfer).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/2FAccountRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   '/api/v1/twofaccounts/{id}/qrcode':
     parameters:
       - $ref: '#/components/parameters/id'
@@ -1106,6 +1156,32 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Partially update tag
+      tags:
+        - tags
+      operationId: patch-tags-id
+      description: Partially updates a tag of the authenticated user (apiResource PATCH update).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     delete:
       summary: Delete tag
       tags:
@@ -1514,6 +1590,54 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  '/api/v1/otp-logs':
+    get:
+      summary: List OTP generation logs
+      tags:
+        - activity
+      operationId: get-otp-logs
+      description: Returns a paginated, filterable log of OTP generation requests (audit trail).
+      parameters:
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+        - name: service
+          in: query
+          schema:
+            type: string
+          description: Filter by service name.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OtpLog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      summary: Delete all OTP generation logs
+      tags:
+        - activity
+      operationId: delete-otp-logs
+      description: Deletes every OTP generation log entry for the authenticated user.
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/emergency-contacts:
     get:
       summary: List emergency contacts
@@ -1916,6 +2040,32 @@ paths:
               Example:
                 value:
                   name: Social networks
+      tags:
+        - groups
+    patch:
+      summary: Partially update group
+      operationId: patch-groups-id
+      description: Partially updates a group of the authenticated user (apiResource PATCH update).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupStore'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
       tags:
         - groups
     delete:
@@ -3209,6 +3359,30 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  '/api/v1/teams/{id}/transfer':
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Transfer team ownership
+      tags:
+        - teams
+      operationId: post-teams-id-transfer
+      description: Transfers ownership of a team to another user (team ownership transfer for offboarding).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   '/api/v1/teams/{id}/invitations':
     parameters:
       - $ref: '#/components/parameters/id'
@@ -4591,6 +4765,33 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+    patch:
+      summary: Partially update a secure note
+      tags:
+        - secure-notes
+      operationId: patch-secure-notes-id
+      description: Partially updates a secure note (apiResource PATCH update). Title and content are end-to-end encrypted by the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureNoteStore'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecureNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     delete:
       summary: Delete a secure note
       tags:
@@ -4600,28 +4801,6 @@ paths:
       responses:
         '204':
           description: No Content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  '/api/v1/secure-notes/{id}/pin':
-    parameters:
-      - $ref: '#/components/parameters/id'
-    post:
-      summary: Toggle secure note pin
-      tags:
-        - secure-notes
-      operationId: post-secure-notes-id-pin
-      description: Toggles the pinned state of a secure note.
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SecureNote'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6325,6 +6504,41 @@ components:
       type: array
       items:
         $ref: '#/components/schemas/WebhookDelivery'
+    OtpLog:
+      title: OTP Generation Log schema
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        account_id:
+          type: integer
+          minimum: 1
+        service:
+          type: string
+        account:
+          type: string
+        requester:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        owner:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        generated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - account_id
+        - generated_at
     TeamActivityLog:
       title: Team Activity Log schema
       type: object
