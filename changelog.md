@@ -1,5 +1,30 @@
 # Change log
 
+## [1.14.0] - 2026-09-02
+
+Companion spec bump for the **2FA-Vault v1.3.1 workflow-audit fix release**. Drift
+check remains at 0. New endpoints model the repaired/completed features:
+
+### Added
+
+- `post /api/v1/encryption/credentials` + `post /api/v1/encryption/bulk-secrets` —
+  the two-step master-password rotation flow (client re-encrypts everything; the
+  server never sees the password or key).
+- `get /api/v1/emergency-contacts/grantee-key-info` — grantee RSA public key lookup
+  so the owner's client can wrap the vault key at designation time.
+- `get /api/v1/emergency-contacts/{contactId}/vault-data` — read-only emergency
+  vault data for an active contact's grantee; fails closed with
+  409 `emergency_key_unavailable` on stale/missing wrapped keys.
+- `post /api/v1/vaults/{vaultId}/unlock` — the missing counterpart of the lock
+  route (a vault locked via the API could previously never be unlocked).
+
+### Changed
+
+- `post /api/v1/backups/import` — format-2 envelopes must be decrypted client-side
+  before upload (undecrypted v2 → 422, no silent legacy fallback); the response now
+  reports `encrypted_count`, `key_mismatch_warning`, `legacy_format_warning` and
+  `imported_account_ids`.
+
 > **Snapshot policy note:** Versioned `2fauth-api-v<x.y.z>.yaml` snapshots are
 > committed for each release. The `v1.9.0` and `v1.10.0` snapshots were not
 > preserved on disk at their release time (their changelog entries below
