@@ -1,5 +1,23 @@
 # Change log
 
+## [1.15.0] - 2026-09-12
+
+Companion spec bump for the **2FA-Vault upstream v8 sync release**. Drift check
+remains at 0 (`php artisan 2fauth:openapi-drift`).
+
+### Added
+
+- `show_in_chips` (boolean) on the `GroupRead`/`GroupStore`/`GroupCollection`
+  schemas — groups can now be pinned as chips on the main accounts view.
+  Virtual groups (All) always report `false`.
+
+### Changed
+
+- `withSecret` query parameter (twofaccounts) is now policy-gated: only users
+  holding the `readSecret` permission (the account owner) get secret fields;
+  shared-account team members receive them omitted. Parameter description
+  updated accordingly.
+
 ## [1.14.0] - 2026-09-02
 
 Companion spec bump for the **2FA-Vault v1.3.1 workflow-audit fix release**. Drift
