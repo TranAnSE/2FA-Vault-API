@@ -30,6 +30,23 @@ restore, server-side vault versioning). Drift check remains at 0
 - Schemas: `BackupSnapshot`, `BackupSnapshotCollection`, `BackupSnapshotDryRun`,
   `BackupSnapshotRestoreResult`, `BackupSnapshotDryRunError422`,
   `BackupSnapshotRestoreError422` and the `snapshotId` path parameter.
+- Per-team **custom roles with a permission matrix** (RBAC):
+  - `get /api/v1/teams/{id}/roles` — list the team's role definitions
+    (any member; the client's source for permission-derived UI gating).
+  - `post` / `put` / `delete /api/v1/teams/{id}/roles[/{roleId}]` — owner-only
+    custom-role CRUD. Slugs `[a-z0-9-]{2,30}` unique per team (system slugs
+    reserved); permissions must be a non-empty subset of the closed catalog;
+    system presets are immutable; deletion is refused while the role is
+    assigned to members (`members_count`) or targeted by pending invitations
+    (`invitations_count`).
+  - Schemas: `TeamRoleDetail`, `TeamRoleCollection`, `TeamPermission` (the
+    7-value closed catalog). The `TeamRole` schema widened from the
+    4-value enum to a slug string (custom slugs included) — consumers
+    updated: PUT member-role request, `TeamRead.role`, `TeamMember.role`,
+    `TeamInvitationStore.role` (also documents the `owner` rejection).
+    Owner-locked capabilities (`team.delete`, `roles.manage`,
+    `activity.export`, ownership transfer) are documented as never
+    grantable through the matrix.
 
 ## [1.15.0] - 2026-09-12
 
