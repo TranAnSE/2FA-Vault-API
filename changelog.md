@@ -1,5 +1,36 @@
 # Change log
 
+## [1.16.0] - 2026-10-09
+
+Companion spec bump for the **2FA-Vault v1.4.0 release** (backup snapshots &
+restore, server-side vault versioning). Drift check remains at 0
+(`php artisan 2fauth:openapi-drift`).
+
+### Added
+
+- New `snapshots` tag with five endpoints for the server-side snapshot store:
+  - `get /api/v1/backups/snapshots` — list snapshots (source lane, counts,
+    size, `salt_changed_since_snapshot`, `unreadable_reason`).
+  - `post /api/v1/backups/snapshots` — create a snapshot (optional label,
+    quota applies: automatic sources never evict manual snapshots).
+  - `delete /api/v1/backups/snapshots/{snapshotId}` — delete a snapshot
+    (404 for other users' snapshots — no existence enumeration).
+  - `post /api/v1/backups/snapshots/{snapshotId}/dry-run` — preview a restore:
+    diff over stable columns (id-primary matching with decoded
+    service+account fallback, disclosed via `warnings`), single-use
+    confirmation token bound to mode + diff hash (TTL 10 min), rate-limited
+    10/h.
+  - `post /api/v1/backups/snapshots/{snapshotId}/restore` — apply the restore:
+    `merge` (non-destructive upsert, per-account isolation) or `replace`
+    (all-or-nothing wipe-and-replace; requires the dry-run token plus the
+    literal `confirm: "RESTORE"`; auto-creates a protected `pre_restore`
+    safety snapshot). Errors: `409 restore_state_changed` (vault drifted
+    since the dry-run), `422 restore_token_invalid` (single-use tokens),
+    `422 unreadable_reason: app_key_rotated`. Rate-limited 3/h.
+- Schemas: `BackupSnapshot`, `BackupSnapshotCollection`, `BackupSnapshotDryRun`,
+  `BackupSnapshotRestoreResult`, `BackupSnapshotDryRunError422`,
+  `BackupSnapshotRestoreError422` and the `snapshotId` path parameter.
+
 ## [1.15.0] - 2026-09-12
 
 Companion spec bump for the **2FA-Vault upstream v8 sync release**. Drift check
