@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 2FA-Vault API
-  version: 1.16.0
+  version: 1.17.0
   description: |-
     This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 
@@ -810,9 +810,10 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
       description: |-
-        Use this endpoint to convert exported 2FAs from another 2FA app to a list of 2FA resources you can POST using the API to create new 2FA accounts.
+        Use this endpoint to convert exported 2FAs from another 2FA app to a list of 2FA resources you can POST using the API to create new 2FA accounts. Accepts export file contents, plaintext otpauth URIs (including Ente Auth plaintext exports) or an encoded QR payload.
 
         > This endpoint does not store anything in database.
+        > Requires a PAT with the **write** scope; read-scope PATs receive 403.
       requestBody:
         content:
           application/json:
@@ -834,6 +835,13 @@ paths:
                   payload: |-
                     otpauth://totp/dropbox:john?secret=T5THFHVVRSDF4AWS
                     otpauth://totp/dropbox:jane?secret=A4GRFHVVRBGY7UIW
+                  withSecret: true
+              Example for an Ente Auth plaintext export:
+                summary: Ente Auth exports newline-separated otpauth URIs in plain text
+                value:
+                  payload: |-
+                    otpauth://totp/Ente:john.doe@gmail.com?issuer=Ente&secret=A4GRFTVVRBGY7UIW
+                    otpauth://totp/GitHub:johndoe?issuer=GitHub&secret=A2GRFTVVRBGY7UIW
                   withSecret: true
               Example for a JSON payload:
                 value:
@@ -921,6 +929,7 @@ paths:
       description: |-
         Use this endpoint to preview a 2FA account described by an otpauth URI.
         It works exactly as if you POSTed an URI to create a 2FA account except it does not save anything in database.
+        Requires a PAT with the **write** scope; read-scope PATs receive 403.
       requestBody:
         content:
           application/json:
@@ -990,12 +999,55 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
-      description: Removes a list of 2FA accounts of the authenticated user from any group
+      description: Removes the authenticated user's own group memberships of a list of 2FA accounts (other users' memberships of the same accounts are left untouched)
       parameters:
         - $ref: '#/components/parameters/ids'
       tags:
         - twofaccounts
     parameters: []
+  /api/v1/twofaccounts/{id}/favorite:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    patch:
+      summary: Set the favorite status of a 2FA account
+      operationId: patch-twofaccounts-favorite
+      tags:
+        - twofaccounts
+      security:
+        - Bearer-Auth: []
+      description: |-
+        Sets the per-user favorite marker of a 2FA account. Requires a PAT with the **write** scope — a PAT limited to read scopes receives 403.
+
+        The marker is scoped to the authenticated user: everyone a shared account is visible to manages their own favorite, and removing a user or a team never leaks another user's marker. Idempotent: posting the current value is a no-op.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_favorite:
+                  type: boolean
+                  description: The new favorite status of the account
+              required:
+                - is_favorite
+            example:
+              is_favorite: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/2FAccountRead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /api/v1/twofaccounts/export:
     get:
       summary: Export 2FA accounts
@@ -3105,7 +3157,7 @@ paths:
       tags:
         - features
       operationId: get-features
-      description: Returns feature flags exposed by the current 2FA-Vault instance.
+      description: Returns feature flags exposed by the current 2FA-Vault instance. The `favorites` flag gates the favorites surface (favorite star, favorites-only filter, enableFavorites preference).
       responses:
         '200':
           description: OK
@@ -3114,6 +3166,9 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+              example:
+                favorites: true
+                iconPack: true
         '401':
           $ref: '#/components/responses/Unauthorized'
     parameters: []
@@ -4325,6 +4380,9 @@ paths:
                     - key: displayMode
                       value: grid
                       locked: true
+                    - key: enableFavorites
+                      value: true
+                      locked: false
                     - key: showTokenAsDot
                       value: true
                       locked: false
@@ -5569,7 +5627,11 @@ components:
           type:
             - integer
             - 'null'
-          description: The ID of the group the 2FA account belongs to
+          description: >-
+            The ID of the group the 2FA account belongs to, from the AUTHENTICATED USER's point of view.
+            Group memberships are per-user since the many-to-many migration: the value is the requester's
+            own grouping for the account (null when the account sits in none of the user's groups), the
+            write path is user-scoped, and group ids owned by other users are rejected.
           minimum: 0
         notes:
           type:
@@ -5611,7 +5673,11 @@ components:
             is_pinned:
               type: boolean
               default: false
-              description: Whether the account is pinned (favorited) to the top of the list
+              description: Whether the account is pinned to the top of the list (sort-to-top marker, distinct from the favorite)
+            is_favorite:
+              type: boolean
+              default: false
+              description: Whether the authenticated user marked the account as a favorite (per-user marker; the value is the requester's own)
           required:
             - id
         - $ref: '#/components/schemas/2FAccountStore'
@@ -5685,6 +5751,9 @@ components:
                 - integer
                 - 'null'
               example: 15
+            is_favorite:
+              type: boolean
+              description: Whether the authenticated user marked the account as a favorite (per-user marker)
           required:
             - group_id
             - service
@@ -6452,7 +6521,11 @@ components:
           type:
             - integer
             - 'null'
-          description: The ID of the group the 2FA account belongs to
+          description: >-
+            The ID of the group the 2FA account belongs to, from the AUTHENTICATED USER's point of view.
+            Group memberships are per-user since the many-to-many migration: the value is the requester's
+            own grouping for the account (null when the account sits in none of the user's groups), the
+            write path is user-scoped, and group ids owned by other users are rejected.
           minimum: 0
         notes:
           type:
@@ -6472,6 +6545,7 @@ components:
         - secret
         - digits
         - algorithm
+
     2FAccountCollection:
       title: 2FA Accounts Collection schema
       description: An array of 2FA accounts

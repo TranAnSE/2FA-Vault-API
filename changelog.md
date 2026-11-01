@@ -1,5 +1,36 @@
 # Change log
 
+## [1.17.0] - 2026-11-01
+
+Companion spec bump for the **2FA-Vault v1.5.0 release** (upstream v9
+migration: favorites, groups many-to-many, Ente import, desktop table
+layout). Drift check returns to 0 (`php artisan 2fauth:openapi-drift`) —
+the favorites route documented here resolves the drift that phase v1.16.x
+left open.
+
+### Added
+
+- `PATCH /api/v1/twofaccounts/{id}/favorite` (tag `twofaccounts`): sets the
+  per-user favorite marker; requires a PAT with the **write** scope (read-scope
+  PATs get 403). Returns the updated `2FAccountRead`.
+- `is_favorite` on the `2FAccountRead` and `Encrypted2FAccountRead` schemas —
+  per-user marker, distinct from the existing `is_pinned` sort-to-top flag
+  (whose description was clarified accordingly).
+- `enableFavorites` user preference (lockable) with a collection example.
+- `favorites` example on the `GET /api/v1/features` surface.
+- Ente Auth plaintext-export example on `POST /api/v1/twofaccounts/migration`
+  (newline-separated otpauth URIs parsed by the existing plaintext migrator).
+
+### Changed
+
+- `group_id` semantics documented as per-user scalar (groups many-to-many):
+  read value = the requester's own grouping, write path user-scoped, foreign
+  group ids rejected. No `groups[]` collection — the scalar contract is frozen.
+- `POST /api/v1/twofaccounts/migration` and `POST /api/v1/twofaccounts/preview`
+  now document the **write**-scope requirement.
+- `PATCH /api/v1/twofaccounts/withdraw` description: removes only the
+  authenticated user's memberships.
+
 ## [1.16.0] - 2026-10-09
 
 Companion spec bump for the **2FA-Vault v1.4.0 release** (backup snapshots &
