@@ -1,5 +1,34 @@
 # Change log
 
+## [1.18.0] - 2026-11-15
+
+Companion spec bump for the **2FA-Vault PRF vault-unlock feature**
+(plan 261114-2101): passkeys enrolled for PRF vault unlock. All five
+endpoints are E2EE-enabled-guarded (400 when off) and gated by
+`manage-webauthn-credentials` (403 on SSO-only instances).
+
+### Added
+
+- `GET /api/v1/encryption/prf/context` (tag `encryption`): per-user `prf_salt`
+  (created lazily and atomically on first read) plus `encryption_salt` /
+  `encryption_test_value` and the `enrollments[]` wrapped keyset. The server
+  stores ONLY wrapped blobs — the PRF output, the vault key and the master
+  password never leave the client.
+- `POST /api/v1/encryption/prf/enroll/options`: server-generated assertion
+  options scoped to one credential (single-use, TTL-gated server-side
+  challenge state).
+- `POST /api/v1/encryption/prf/enroll` (write scope): stores the wrapped RSA
+  keyset ONLY after verifying the submitted assertion signature against the
+  stored passkey — a hijacked session or stolen write-PAT cannot plant a
+  `public_key`.
+- `POST /api/v1/encryption/prf/rewrap` (write scope, 2/hour): rotation re-wrap
+  of `wrapped_vault_key` with the `expected_encryption_salt_hash` stale-writer
+  guard (409) and all-or-nothing 422 on unknown credential ids.
+- `DELETE /api/v1/encryption/prf/{credentialId}` (write scope): removes one
+  enrollment; foreign/unknown → 404; revoke/recovery/user-deletion cascade via FK.
+- Schemas `PrfContext`, `PrfEnrollment`, `PrfEnrollOptions`, `PrfEnrollRequest`,
+  `PrfRewrapRequest`.
+
 ## [1.17.0] - 2026-11-01
 
 Companion spec bump for the **2FA-Vault v1.5.0 release** (upstream v9

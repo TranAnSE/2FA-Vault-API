@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 2FA-Vault API
-  version: 1.17.0
+  version: 1.18.0
   description: |-
     This is the definition (following OpenAPI 3.1 specification) of the REST API of 2FA-Vault, a personal fork of [2FA-Vault](https://github.com/TranAnSE/2FA-Vault) for managing Two-Factor Authentication (2FA) accounts and generating their security passwords.
 
@@ -3151,6 +3151,178 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
     parameters: []
+  /api/v1/encryption/prf/context:
+    get:
+      summary: Get PRF unlock context
+      tags:
+        - encryption
+      operationId: get-encryption-prf-context
+      description: >-
+        Single fetch for the passkey (PRF) unlock flow: returns the client-side prf salt plus the
+        E2EE salt/test value and the user's enrolled credentials with their wrapped keyset blobs.
+        The server stores ONLY wrapped blobs (zero knowledge): the PRF output, the vault key and
+        the master password never leave the client. The prf_salt is created lazily and atomically
+        on first read. Requires E2EE enabled (400 otherwise) and the manage-webauthn-credentials
+        gate (403 on SSO-only instances).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrfContext'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/encryption/prf/enroll/options:
+    post:
+      summary: Get PRF enrollment assertion options
+      tags:
+        - encryption
+      operationId: post-encryption-prf-enroll-options
+      description: >-
+        Issues server-generated WebAuthn assertion options scoped to ONE credential for the PRF
+        enrollment possession proof. The challenge is stored server-side (single-use, TTL-gated)
+        and must be answered by a signed assertion in POST /api/v1/encryption/prf/enroll. No prf
+        extension server-side — the client evaluates prf locally while riding the ceremony.
+        Foreign credential ids are 404. Requires E2EE enabled (400) and the webauthn gate (403).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credential_id:
+                  type: string
+                  maxLength: 510
+              required:
+                - credential_id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrfEnrollOptions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/encryption/prf/enroll:
+    post:
+      summary: Enroll a passkey for PRF vault unlock
+      tags:
+        - encryption
+      operationId: post-encryption-prf-enroll
+      description: >-
+        Stores the per-credential wrapped RSA keyset (public_key, wrapped_private_key,
+        wrapped_vault_key) — all produced client-side. SECURITY: the server FIRST verifies the
+        submitted assertion signature against the stored passkey (possession proof), so a hijacked
+        session or stolen write-PAT cannot plant a public_key (the vault-key exfiltration-oracle
+        path). Re-enroll replaces the blobs atomically. Requires E2EE enabled (400) and the
+        webauthn gate (403); foreign credential ids are 404.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrfEnrollRequest'
+      responses:
+        '204':
+          description: Stored
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/encryption/prf/rewrap:
+    post:
+      summary: Re-wrap PRF enrollments after master-password rotation
+      tags:
+        - encryption
+      operationId: post-encryption-prf-rewrap
+      description: >-
+        Rotation path (no PRF ceremony): re-encapsulates the vault key under each enrolled
+        credential's stored public key. expected_encryption_salt_hash is the stale-writer guard —
+        409 when the caller's salt view is stale (racing tab / interleaved rotation). Unknown
+        credential ids yield 422 with zero rows touched. Requires E2EE enabled (400) and the
+        webauthn gate (403). Rate limited to 2/hour per user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrfRewrapRequest'
+      responses:
+        '204':
+          description: Re-wrapped
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Stale writer — encryption_salt changed since the caller last read it
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
+  /api/v1/encryption/prf/{credentialId}:
+    delete:
+      summary: Remove a PRF enrollment
+      tags:
+        - encryption
+      operationId: delete-encryption-prf-credential
+      description: >-
+        Deletes the enrollment for one of the authenticated user's own credentials; foreign or
+        unknown ids are 404. Passkey revoke/recovery/user deletion remove enrollments via FK
+        cascade. Requires E2EE enabled (400) and the webauthn gate (403).
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    parameters: []
   /api/v1/features:
     get:
       summary: Get feature flags
@@ -5830,6 +6002,151 @@ components:
       required:
         - message
         - encryption_enabled
+    PrfContext:
+      title: PRF unlock context schema
+      type: object
+      description: Client-side inputs for passkey (PRF) vault unlock; the server only ever holds wrapped blobs
+      properties:
+        prf_salt:
+          type: string
+          description: Per-user random base64 salt evaluated client-side by the WebAuthn prf extension
+          example: Gx9Yw2KfLmN8qRsTvBu7CxZ4aD5eH3jWkP6yU0iO1nM=
+        encryption_salt:
+          type:
+            - string
+            - 'null'
+          example: test_salt
+        encryption_test_value:
+          type:
+            - string
+            - 'null'
+          example: '{"ciphertext":"test","iv":"test","authTag":"test"}'
+        enrollments:
+          type: array
+          description: Enrolled passkeys with their wrapped keyset blobs (empty when none)
+          items:
+            $ref: '#/components/schemas/PrfEnrollment'
+      required:
+        - prf_salt
+        - enrollments
+    PrfEnrollment:
+      title: PRF enrollment schema
+      type: object
+      description: One enrolled credential's wrapped keyset (opaque wrapped blobs, zero knowledge)
+      properties:
+        credential_id:
+          type: string
+        public_key:
+          type: string
+          description: SPKI base64 of the credential's RSA-OAEP wrapping keypair
+        wrapped_private_key:
+          type: string
+          description: AES-256-GCM envelope of the PKCS#8 private key wrapped by HKDF(PRF output)
+        wrapped_vault_key:
+          type: string
+          description: RSA-OAEP encapsulation of the vault key under public_key
+      required:
+        - credential_id
+        - public_key
+        - wrapped_private_key
+        - wrapped_vault_key
+    PrfEnrollOptions:
+      title: PRF enroll options schema
+      type: object
+      description: Server-generated WebAuthn assertion options scoped to one credential
+      properties:
+        challenge:
+          type: string
+        allowCredentials:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: public-key
+              id:
+                type: string
+        rpId:
+          type: string
+          example: localhost
+        userVerification:
+          type: string
+          example: required
+      required:
+        - challenge
+        - allowCredentials
+    PrfEnrollRequest:
+      title: PRF enroll request schema
+      type: object
+      description: Signed assertion (possession proof) plus the client-produced wrapped keyset blobs
+      properties:
+        credential_id:
+          type: string
+          maxLength: 510
+        assertion:
+          type: object
+          description: Raw browser PublicKeyCredential JSON for the server-challenged ceremony
+          properties:
+            id:
+              type: string
+            rawId:
+              type: string
+            type:
+              type: string
+              example: public-key
+            response:
+              type: object
+              properties:
+                clientDataJSON:
+                  type: string
+                authenticatorData:
+                  type: string
+                signature:
+                  type: string
+        public_key:
+          type: string
+          maxLength: 16384
+        wrapped_private_key:
+          type: string
+          maxLength: 16384
+        wrapped_vault_key:
+          type: string
+          maxLength: 16384
+      required:
+        - credential_id
+        - assertion
+        - public_key
+        - wrapped_private_key
+        - wrapped_vault_key
+    PrfRewrapRequest:
+      title: PRF rewrap request schema
+      type: object
+      description: Rotation re-wrappings with the stale-writer salt guard
+      properties:
+        expected_encryption_salt_hash:
+          type: string
+          description: sha256 of the encryption_salt as the caller last saw it
+          maxLength: 64
+          example: 5f2c1a…64-hex…
+        wrappings:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            properties:
+              credential_id:
+                type: string
+              wrapped_vault_key:
+                type: string
+                maxLength: 16384
+            required:
+              - credential_id
+              - wrapped_vault_key
+      required:
+        - expected_encryption_salt_hash
+        - wrappings
     EncryptionStatus:
       title: Encryption status schema
       type: object
