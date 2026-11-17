@@ -3233,7 +3233,9 @@ paths:
         submitted assertion signature against the stored passkey (possession proof), so a hijacked
         session or stolen write-PAT cannot plant a public_key (the vault-key exfiltration-oracle
         path). Re-enroll replaces the blobs atomically. Requires E2EE enabled (400) and the
-        webauthn gate (403); foreign credential ids are 404.
+        webauthn gate (403); foreign credential ids are 404. 409 when expected_encryption_salt_hash
+        no longer matches the stored salt (rotation elsewhere — the caller's in-memory vault key
+        may be superseded), checked again under a row lock inside the write transaction.
       requestBody:
         content:
           application/json:
@@ -3248,6 +3250,15 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale writer — encryption_salt changed since the caller's vault key was derived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
         '422':
           $ref: '#/components/responses/ValidationError'
         '429':
@@ -6079,11 +6090,15 @@ components:
     PrfEnrollRequest:
       title: PRF enroll request schema
       type: object
-      description: Signed assertion (possession proof) plus the client-produced wrapped keyset blobs
+      description: Signed assertion (possession proof), the client-produced wrapped keyset blobs, and the stale-writer salt guard
       properties:
         credential_id:
           type: string
           maxLength: 255
+        expected_encryption_salt_hash:
+          type: string
+          description: sha256 of the encryption_salt as the caller's in-memory vault key was derived under — 409 when the stored salt no longer matches
+          maxLength: 64
         assertion:
           type: object
           description: Raw browser PublicKeyCredential JSON for the server-challenged ceremony
@@ -6115,6 +6130,7 @@ components:
           maxLength: 16384
       required:
         - credential_id
+        - expected_encryption_salt_hash
         - assertion
         - public_key
         - wrapped_private_key
